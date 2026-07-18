@@ -102,3 +102,25 @@ def login():
         "access_token": access_token,
         "user": user.to_dict()
     }), 200
+
+@auth_bp.route('/me', methods=['GET'])
+@jwt_required()
+def get_current_user():
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify({"user": user.to_dict()}), 200
+
+
+@auth_bp.route('/admin-only', methods=['GET'])
+@jwt_required()
+def admin_only():
+    claims = get_jwt()
+
+    if claims.get('role') != 'admin':
+        return jsonify({"error": "Admin access required"}), 403
+
+    return jsonify({"message": "Welcome, admin! This is protected admin data."}), 200
