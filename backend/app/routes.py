@@ -1,7 +1,9 @@
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt
 from app import db, bcrypt
 from app.models import User
 from sqlalchemy.exc import IntegrityError
+
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -63,3 +65,40 @@ def register():
         "message": "User registered successfully",
         "user": new_user.to_dict()
     }), 201
+
+@auth_bp.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "No input data provided"}), 400
+
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+
+    if not username or not password:
+        return jsonify({"error": "Username and password are required"}), 400
+
+    # --- Find user (allow login via username OR email) ---
+    user = User.query.filter(
+        (User.username == username) | (User.email == username.lower())
+    ).first()
+
+    if not user:
+        return jsonify({"error": "Invalid username or password"}), 401
+
+    # --- Check password ---
+    if not bcrypt.check_password_hash(user.password_hash, password):
+        return jsonify({"error": "Invalid username or password"}), 401
+
+    # --- Create JWT token, embedding role as a custom claim ---
+    access_token = create_access_token(
+        identity=str(user.id),
+        additional_claims={"role": user.role, "username": user.username}
+    )
+
+    return jsonify({
+        "message": "Login successful",
+        "access_token": access_token,
+        "user": user.to_dict()
+    }), 200
